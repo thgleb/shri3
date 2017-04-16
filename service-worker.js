@@ -6,11 +6,27 @@
 
 const CACHE_VERSION = '1.0.0-broken';
 
+const RESOURCES = [
+    './assets/blocks.js',
+    './assets/star.svg',
+    './assets/style.css',
+    './assets/templates.js',
+
+    './vendor/bem-components-dist-5.0.0/touch-phone/bem-components.dev.js',
+    './vendor/bem-components-dist-5.0.0/touch-phone/bem-components.dev.css',
+    './vendor/kv-keeper.js-1.0.4/kv-keeper.js',
+
+    'gifs.html'
+];
+
+let cacheFail = [];
+
 importScripts('../vendor/kv-keeper.js-1.0.4/kv-keeper.js');
 
 
 self.addEventListener('install', event => {
-    const promise = preCacheAllFavorites()
+    const promise = preCacheResources()
+        .then(() => preCacheAllFavorites())
         // Вопрос №1: зачем нужен этот вызов?
         .then(() => self.skipWaiting())
         .then(() => console.log('[ServiceWorker] Installed!'));
@@ -37,9 +53,8 @@ self.addEventListener('fetch', event => {
     const cacheKey = url.origin + url.pathname;
 
     let response;
-    if (needStoreForOffline(cacheKey)) {
-        response = caches.match(cacheKey)
-            .then(cacheResponse => cacheResponse || fetchAndPutToCache(cacheKey, event.request));
+    if (cacheFail.includes(cacheKey)) {
+        response = fetchAndPutToCache(cacheKey, event.request);
     } else {
         response = fetchWithFallbackToCache(event.request);
     }
@@ -53,6 +68,12 @@ self.addEventListener('message', event => {
     event.waitUntil(promise);
 });
 
+function preCacheResources() {
+    return caches.open(CACHE_VERSION)
+        .then(cache => {
+            return cache.addAll(RESOURCES);
+        });
+}
 
 // Положить в новый кеш все добавленные в избранное картинки
 function preCacheAllFavorites() {
@@ -123,13 +144,6 @@ function deleteObsoleteCaches() {
         });
 }
 
-// Нужно ли при скачивании сохранять ресурс для оффлайна?
-function needStoreForOffline(cacheKey) {
-    return cacheKey.includes('vendor/') ||
-        cacheKey.includes('assets/') ||
-        cacheKey.endsWith('jquery.min.js');
-}
-
 // Скачать и добавить в кеш
 function fetchAndPutToCache(cacheKey, request) {
     return fetch(request)
@@ -137,7 +151,14 @@ function fetchAndPutToCache(cacheKey, request) {
             return caches.open(CACHE_VERSION)
                 .then(cache => {
                     // Вопрос №5: для чего нужно клонирование?
-                    cache.put(cacheKey, response.clone());
+                    cache.put(cacheKey, response.clone())
+                        .then(() => {
+                            // если успешно ушло в кэш, удалить из cacheFail
+                            let i = cacheFail.indexOf(cacheKey);
+                            if (i > -1) {
+                                cacheFail.splice(i, 1);
+                            }
+                        });
                 })
                 .then(() => response);
         })
