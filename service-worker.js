@@ -181,7 +181,8 @@ function fetchWithFallbackToCache(request) {
 
 // Обработать сообщение от клиента
 const messageHandlers = {
-    'favorite:add': handleFavoriteAdd
+    'favorite:add': handleFavoriteAdd,
+    'favorite:remove': handleFavoriteRemove
 };
 
 function handleMessage(eventData) {
@@ -212,8 +213,32 @@ function handleFavoriteAdd(id, data) {
                     );
                 })
                 .catch(response => {
-                    console.log("[ServiceWorker] Failed to put to cache: ", response.url);
+                    console.log("[ServiceWorker] Failed to put to cache: ", {
+                        id,
+                        url: response.url
+                    });
+
                     urls.forEach(url => cacheFail.push(url));
+                });
+        });
+}
+
+// Обработать сообщение об удалении картинки из избранного
+function handleFavoriteRemove(id, data) {
+    return caches.open(CACHE_VERSION)
+        .then(cache => {
+            const urls = [].concat(
+                data.fallback,
+                (data.sources || []).map(item => item.url)
+            );
+
+            return Promise
+                .all(urls.map(url => cache.delete(url)))
+                .catch((response) => {
+                    console.log('[ServiceWorker] Failed to delete from cache: ', {
+                        id,
+                        url: response.url
+                    });
                 });
         });
 }
