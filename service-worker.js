@@ -4,9 +4,11 @@
  * Сервис-воркер, обеспечивающий оффлайновую работу избранного
  */
 
-const CACHE_VERSION = '1.0.0-broken';
+const CACHE_VERSION = '1.0.1';
 
 const RESOURCES = [
+    'https://yastatic.net/jquery/3.1.0/jquery.min.js',
+
     './assets/blocks.js',
     './assets/star.svg',
     './assets/style.css',
@@ -208,6 +210,10 @@ function handleFavoriteAdd(id, data) {
                     return Promise.all(
                         responses.map(response => cache.put(response.url, response))
                     );
+                })
+                .catch(response => {
+                    console.log("[ServiceWorker] Failed to put to cache: ", response.url);
+                    urls.forEach(url => cacheFail.push(url));
                 });
         });
 }
